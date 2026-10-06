@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><title>Tracker V2</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:Arial}#map{height:85vh}header{padding:12px;background:#000;color:#fff}select,button{padding:6px 12px;margin-left:10px}</style>
+</head><body>
+<header>
+<b>📍 TRACKER V2 - Chennai</b>
+<select id="userSel" onchange="load()"><option value="all">All Users</option></select>
+<button onclick="load()">🔄 Refresh</button>
+<span id="count" style="margin-left:15px"></span>
+</header>
+<div id="map"></div>
+<script>
+var map=L.map('map').setView([13.0827,80.2707],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+var layer=L.layerGroup().addTo(map);
+async function load(){
+ try{
+  let res=await fetch('location_history.json?v='+Date.now());
+  let text=await res.text();
+  if(!text.trim()){document.getElementById('count').innerText='File empty - start tracking';return;}
+  let data=[];
+  try{let j=JSON.parse(text); data=Array.isArray(j)?j:[j];}catch{
+   data=text.trim().split('\n').map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);
+  }
+  let users=[...new Set(data.map(d=>d.userId))];
+  let selEl=document.getElementById('userSel');
+  let cur=selEl.value;
+  selEl.innerHTML='<option value="all">All Users ('+data.length+')</option>';
+  users.forEach(u=>{let o=document.createElement('option');o.value=u;o.text=u;if(u==cur)o.selected=true;selEl.appendChild(o);});
+  let filter=selEl.value;
+  let filtered=filter=='all'?data:data.filter(d=>d.userId==filter);
+  document.getElementById('count').innerText=filtered.length+' points | '+filter;
+  layer.clearLayers();
+  if(filtered.length==0)return;
+  let latlngs=filtered.map(d=>[d.lat,d.lng]);
+  L.polyline(latlngs,{color:'red',weight:3}).addTo(layer);
+  latlngs.forEach((p,i)=>L.circleMarker(p,{radius:6,color:filtered[i].userId=='abdhul'?'blue':filtered[i].userId=='blessing'?'green':'orange'}).bindPopup(filtered[i].userId+'<br>'+filtered[i].timestamp).addTo(layer));
+  map.fitBounds(latlngs);
+ }catch(e){document.getElementById('count').innerText='Error: '+e.message; console.error(e);}
+}
+load(); setInterval(load,5000);
+</script>
+</body></html>

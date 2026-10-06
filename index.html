@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRACKER V2 - INDIA ONLY + UNIQUE ID</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body{margin:0;font-family:Arial;background:#0f172a;color:#fff;height:100vh;display:flex;flex-direction:column}
+header{background:#020617;padding:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+input,select{padding:8px;border-radius:6px;border:none;font-size:13px}
+button{padding:8px 12px;border:none;border-radius:6px;font-weight:bold;cursor:pointer}
+#map{flex:1;background:#1e293b}
+label{font-size:11px;color:#94a3b8}
+.box{display:flex;flex-direction:column}
+</style>
+</head>
+<body>
+<header>
+<b>🇮🇳 INDIA TRACKER</b>
+<div class="box"><label>UNIQUE ID *</label><input id="userId" placeholder="raji_01" style="width:90px"></div>
+<div class="box"><label>FULL NAME</label><input id="displayName" placeholder="Raji Kumar" style="width:110px"></div>
+<div class="box"><label>PHONE</label><input id="phoneNo" placeholder="98765" style="width:85px"></div>
+<div class="box"><label>PLACE SEARCH</label><input id="placeName" placeholder="T Nagar, Chennai" style="width:130px"></div>
+<button onclick="searchPlace()" style="background:#8b5cf6;color:#fff">🔍 Search</button>
+<select id="userSel" style="min-width:110px"></select>
+<button onclick="toggleAdd()" id="addBtn" style="background:#f59e0b">📍 Add OFF</button>
+<button onclick="downloadJSON()" style="background:#22c55e">💾 Save</button>
+<span id="count" style="font-size:12px"></span>
+</header>
+<div id="map"></div>
+
+<script>
+// SAMPLE DATA
+const DATA=[
+{"userId":"raji_01","displayName":"Raji Kumar","phone":"9876543210","lat":13.0827,"lng":80.2707,"speed":5},
+{"userId":"raji_02","displayName":"Raji Priya","phone":"8765432109","lat":13.085,"lng":80.273,"speed":6},
+{"userId":"abdhul","displayName":"Abdhul","phone":"9988776655","lat":13.0835,"lng":80.2715,"speed":7}
+];
+
+// INDIA MAP ONLY - BOUNDS SET PANROM SIR!
+const INDIA_BOUNDS = [[6.0, 68.0],[35.5, 97.5]]; // South-West to North-East of India
+var map = L.map('map',{
+  maxBounds: INDIA_BOUNDS,
+  maxBoundsViscosity: 1.0,
+  minZoom: 5,
+  maxZoom: 18
+}).setView([20.5937, 78.9629], 5); // India Center
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OSM | India Only',
+  bounds: INDIA_BOUNDS
+}).addTo(map);
+
+var layer = L.layerGroup().addTo(map);
+var currentData=[...DATA];
+let addMode=false;
+
+function toggleAdd(){
+  let id=document.getElementById('userId').value;
+  if(!id){ alert('UNIQUE ID type pannunga sir! ex: raji_01'); return; }
+  addMode=!addMode;
+  document.getElementById('addBtn').innerText=addMode?'📍 ON - Click in INDIA':'📍 Add OFF';
+  document.getElementById('addBtn').style.background=addMode?'#22c55e':'#f59e0b';
+}
+
+function getColor(userId){
+  let colors=['#ef4444','#3b82f6','#22c55e','#f59e0b','#8b5cf6','#ec4899'];
+  let hash=0; for(let i=0;i<userId.length;i++) hash=userId.charCodeAt(i)+((hash<<5)-hash);
+  return colors[Math.abs(hash)%colors.length];
+}
+
+function draw(){
+  let f=document.getElementById('userSel').value;
+  let fil=f=='all'?currentData:currentData.filter(d=>d.userId==f);
+  document.getElementById('count').innerText=fil.length+' pts | INDIA ONLY';
+  layer.clearLayers();
+  if(!fil.length) return;
+
+  // Group by userId
+  let grouped={};
+  fil.forEach(d=>{ if(!grouped[d.userId]) grouped[d.userId]=[]; grouped[d.userId].push(d); });
+
+  Object.keys(grouped).forEach(uid=>{
+    let points=grouped[uid];
+    let latlngs=points.map(d=>[d.lat,d.lng]);
+    let color=getColor(uid);
+    L.polyline(latlngs,{color:color,weight:4}).addTo(layer);
+    points.forEach(p=>{
+      L.circleMarker([p.lat,p.lng],{radius:8,color:color,fillColor:color,fillOpacity:0.9})
+     .bindPopup(`<b>ID: ${p.userId}</b><br>Name: ${p.displayName||p.userId}<br>Phone: ${p.phone||'N/A'}<br>📍 ${p.lat.toFixed(4)},${p.lng.toFixed(4)}`)
+     .addTo(layer);
+    });
+  });
+  if(fil.length>0) map.fitBounds(fil.map(d=>[d.lat,d.lng]),{padding:[50,50], maxZoom:14});
+}
+
+function buildDropdown(){
+  let users=[...new Map(currentData.map(d=>[d.userId,d])).values()];
+  let sel=document.getElementById('userSel');
+  sel.innerHTML='<option value="all">All Users ('+currentData.length+')</option>';
+  users.forEach(u=>{
+    let o=document.createElement('option');
+    o.value=u.userId;
+    o.textContent=`${u.userId} (${u.displayName||u.userId}) - ${currentData.filter(x=>x.userId==u.userId).length}`;
+    sel.appendChild(o);
+  });
+  sel.onchange=draw; draw();
+}
+
+map.on('click',e=>{
+  if(!addMode) return;
+  // Check if click inside India
+  if(e.latlng.lat < 6 || e.latlng.lat > 35.5 || e.latlng.lng < 68 || e.latlng.lng > 97.5){
+    alert('INDIA kulla mattum click pannunga sir! 🇮🇳');
+    return;
+  }
+  let uid=document.getElementById('userId').value;
+  let dname=document.getElementById('displayName').value;
+  let phone=document.getElementById('phoneNo').value;
+  if(!uid){ alert('UNIQUE ID venum sir!'); return; }
+  currentData.push({userId:uid, displayName:dname||uid, phone:phone, lat:e.latlng.lat, lng:e.latlng.lng, speed:5, timestamp:new Date().toISOString()});
+  buildDropdown(); document.getElementById('userSel').value=uid; draw();
+});
+
+async function searchPlace(){
+  let place=document.getElementById('placeName').value;
+  let uid=document.getElementById('userId').value;
+  let dname=document.getElementById('displayName').value;
+  let phone=document.getElementById('phoneNo').value;
+  if(!uid){ alert('UNIQUE ID type pannunga sir! ex: raji_01'); return; }
+  if(!place){ alert('Place type pannunga sir! ex: Madurai'); return; }
+  document.getElementById('count').innerText='Searching '+place+' in INDIA...';
+  try{
+    let res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${place},India&limit=1&countrycodes=in`);
+    let data=await res.json();
+    if(!data.length){ alert('Place kedaikala sir - vera peru try pannunga'); return; }
+    let lat=parseFloat(data[0].lat), lng=parseFloat(data[0].lon);
+    currentData.push({userId:uid, displayName:dname||uid, phone:phone, lat:lat, lng:lng, speed:5, timestamp:new Date().toISOString(), place:place});
+    buildDropdown(); document.getElementById('userSel').value=uid; draw();
+    map.setView([lat,lng],13);
+  }catch(e){ alert('Internet venum sir India search ku!'); }
+}
+
+function downloadJSON(){
+  let jsonl=currentData.map(j=>JSON.stringify(j)).join('\n');
+  let blob=new Blob([jsonl],{type:'application/json'});
+  let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='location_history_india.json'; a.click();
+}
+
+setTimeout(()=>{ map.invalidateSize(); buildDropdown(); map.setView([20.5937,78.9629],5); }, 600);
+</script>
+</body>
+</html>

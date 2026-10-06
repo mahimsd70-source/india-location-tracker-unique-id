@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head><title>Tracker V2</title><meta name="viewport" content="width=device-width">
+<style>body{font-family:sans-serif;padding:20px}button{padding:15px;width:100%;background:#000;color:#fff;border-radius:10px;font-size:18px}#log{margin-top:20px;background:#f0f0f0;padding:10px;height:200px;overflow:auto}</style>
+</head>
+<body>
+<h2>Tracker V2 - Battery Saver</h2>
+<input id="userId" placeholder="Your Name e.g. ramesh" style="width:100%;padding:10px;margin-bottom:10px">
+<button onclick="start()">START SHARING (Consent)</button>
+<button onclick="stop()" style="background:red;margin-top:10px">STOP</button>
+<div id="log"></div>
+<script>
+let watchId, intervalMs=5000, timer;
+function log(m){document.getElementById('log').innerHTML+=m+"<br>"}
+function getMode(speed){
+ if(speed<1) return {ms:60000, name:"LOW POWER - Home"};
+ if(speed>10) return {ms:3000, name:"HIGH ACCURACY - Driving"};
+ return {ms:10000, name:"BALANCED - Walking"};
+}
+function start(){
+ const userId=document.getElementById('userId').value||"test_user";
+ log("Started for "+userId);
+ navigator.geolocation.watchPosition(async pos=>{
+  const speed=pos.coords.speed||0;
+  const mode=getMode(speed);
+  intervalMs=mode.ms;
+  log(`Speed: ${speed.toFixed(1)} m/s | Mode: ${mode.name} | Next in ${intervalMs/1000}s`);
+  
+  // Send to your server
+  await fetch('http://127.0.0.1:8000/location',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body: JSON.stringify({userId, lat: pos.coords.latitude, lng: pos.coords.longitude, speed, battery: 100})
+  });
+ }, err=>log("GPS Error: "+err.message), {enableHighAccuracy:true});
+
+ log("Sharing with consent... Battery Saver ON");
+}
+function stop(){log("Stopped sharing"); location.reload();}
+</script>
+</body>
+</html>

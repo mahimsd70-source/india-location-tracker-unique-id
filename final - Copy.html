@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRACKER V2 - Final</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body{margin:0;font-family:'Segoe UI',Arial;background:#f5f5f5}
+header{background:#0f172a;color:#fff;padding:12px 15px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+header b{font-size:18px}
+select,input,button{padding:8px 12px;border-radius:6px;border:none;font-size:14px}
+select{background:#fff;min-width:140px}
+#count{background:#1e293b;padding:6px 12px;border-radius:20px;font-size:13px}
+#map{height:84vh;width:100%}
+.card{background:#fff;padding:8px 12px;border-radius:8px;color:#000;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+</style>
+</head>
+<body>
+<header>
+<b>📍 TRACKER V2</b>
+<input type="file" id="fileInput" accept=".json,.txt">
+<select id="userSel"><option value="all">All Users</option></select>
+<button onclick="document.getElementById('fileInput').click()">📁 Load JSON</button>
+<span id="count">No file loaded</span>
+</header>
+<div id="map"></div>
+
+<script>
+// FIXED MAP - No 403 error (CARTO tiles)
+var map = L.map('map').setView([13.0827, 80.2707], 13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© CARTO © OpenStreetMap',
+  subdomains: 'abcd',
+  maxZoom: 20
+}).addTo(map);
+
+var layer = L.layerGroup().addTo(map);
+
+document.getElementById('fileInput').addEventListener('change', function(e){
+  let file = e.target.files[0];
+  if(!file) return;
+  let reader = new FileReader();
+  reader.onload = function(ev){
+    let text = ev.target.result;
+    let data = [];
+    try {
+      let j = JSON.parse(text);
+      data = Array.isArray(j)? j : [j];
+    } catch {
+      // JSON Lines format: one JSON per line
+      data = text.trim().split('\n').map(l=>{
+        try{return JSON.parse(l)}catch{return null}
+      }).filter(Boolean);
+    }
+
+    if(data.length==0){ alert('Empty file!'); return; }
+
+    // Get unique users
+    let users = [...new Set(data.map(d=>d.userId || d.user || 'Unknown'))];
+    let sel = document.getElementById('userSel');
+    let cur = sel.value;
+    sel.innerHTML = `<option value="all">All Users (${data.length})</option>`;
+    users.forEach(u=>{
+      let o = document.createElement('option');
+      o.value = u; o.text = u + ` (${data.filter(x=>(x.userId||x.user)==u).length})`;
+      if(u==cur) o.selected=true;
+      sel.appendChild(o);
+    });
+
+    function draw(){
+      let f = sel.value;
+      let filtered = f=='all'? data : data.filter(d=>(d.userId||d.user)==f);
+      document.getElementById('count').innerText = `${filtered.length} points | ${f}`;
+      layer.clearLayers();
+      if(filtered.length==0) return;
+      let latlngs = filtered.map(d=>[d.lat, d.lng]);
+      L.polyline(latlngs, {color:'#e11d48', weight:4, opacity:0.8}).addTo(layer);
+      latlngs.forEach((p,i)=>{
+        let d = filtered[i];
+        L.circleMarker(p, {
+          radius: 7,
+          fillColor: d.userId=='abdhul'?'#3b82f6':d.userId=='blessing'?'#22c55e':'#f97316',
+          color:'#fff', weight:2, fillOpacity:1
+        }).bindPopup(`<div class="card"><b>${d.userId}</b><br>Lat:${d.lat.toFixed(5)}<br>Lng:${d.lng.toFixed(5)}<br>Speed:${d.speed||0}<br>${d.timestamp||''}</div>`).addTo(layer);
+      });
+      map.fitBounds(latlngs, {padding:[30,30]});
+    }
+    sel.onchange = draw;
+    draw();
+  };
+  reader.readAsText(file);
+});
+</script>
+</body>
+</html>
